@@ -1,0 +1,61 @@
+import cv2
+import numpy as np
+import pytesseract
+import time
+import jetson.inference
+import jetson.utils
+
+# Load pre-trained ONNX model for license plate detection
+net = jetson.inference.detectNet("ssd-mobilenet-v2", threshold=0.5)
+
+# Set up camera (Jetson CSI camera or USB webcam)
+camera = jetson.utils.gstCamera(1280, 720, "/dev/video0")  # Change if using USB webcam
+display = jetson.utils.glDisplay()
+
+# Tesseract OCR Configuration
+pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
+
+# Function to extract text from the detected license plate
+def recognize_plate(img):
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
+    text = pytesseract.image_to_string(thresh, config="--psm 8")
+    return text.strip()
+
+# Main Loop for Real-Time Processing
+while display.IsOpen():
+    img, width, height = camera.CaptureRGBA()
+    
+    # Convert image format
+    frame = jetson.utils.cudaToNumpy(img, width, height, 4)
+    frame = cv2.cvtColor(frame.astype(np.uint8), cv2.COLOR_RGBA2BGR)
+
+    # Detect objects in the frame
+    detections = net.Detect(img, width, height)
+
+    for detection in detections:
+        # Extract bounding box
+        x1, y1, x2, y2 = int(detection.Left), int(detection.Top), int(detection.Right), int(detection.Bottom)
+
+        # Extract plate image
+        plate_img = frame[y1:y2, x1:x2]
+
+        # OCR processing
+        plate_number = recognize_plate(plate_img)
+
+        # Display the detected plate number
+        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        cv2.putText(frame, plate_number, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+
+        # Save plate number to a log file
+        with open("recognized_plates.txt", "a") as log_file:
+            log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - {plate_number}\n")
+
+    # Display the frame
+    display.RenderOnce(img, width, height)
+    display.SetTitle(f"License Plate Recognition - {time.strftime('%H:%M:%S')}")
+
+# Release resources
+camera.Close()
+display.Close()
+cv2.destroyAllWindows()

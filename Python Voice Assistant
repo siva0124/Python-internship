@@ -1,0 +1,129 @@
+import random
+import pyttsx3
+import speech_recognition as sr
+import wikipedia
+import webbrowser
+import os
+import datetime
+import requests
+
+engine = pyttsx3.init("sapi5")
+voices = engine.getProperty("voices")
+engine.setProperty('voice', voices[1].id)  # 1 for female, 0 for male
+
+def speak(audio):
+    engine.say(audio)
+    engine.runAndWait()
+
+def take_command():
+    r = sr.Recognizer()
+    with sr.Microphone() as source:
+        print("Listening...")
+        r.pause_threshold = 1
+        audio = r.listen(source)
+
+    try:
+        print("Recognizing...")
+        query = r.recognize_google(audio, language='en-in')
+        print(f"User said: {query}\n")
+    except Exception:
+        speak("I didn't understand. Please repeat.")
+        return "None"
+    
+    return query.lower()
+
+def get_weather(city="New York"):
+    api_key = "your_openweather_api_key"  # Replace with your API key
+    url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metric"
+    
+    try:
+        response = requests.get(url).json()
+        temp = response["main"]["temp"]
+        weather_desc = response["weather"][0]["description"]
+        return f"The current temperature in {city} is {temp}°C with {weather_desc}."
+    except:
+        return "I couldn't fetch the weather at the moment."
+
+if __name__ == '__main__':
+    speak("Amigo assistant activated. How can I help you?")
+    
+    while True:
+        query = take_command()
+
+        # Wikipedia search
+        if 'wikipedia' in query:
+            speak("Searching Wikipedia...")
+            query = query.replace("wikipedia", '')
+            results = wikipedia.summary(query, sentences=2)
+            speak("According to Wikipedia,")
+            speak(results)
+
+        # System Time & Date
+        elif 'time' in query:
+            time_now = datetime.datetime.now().strftime("%I:%M %p")
+            speak(f"The time is {time_now}")
+
+        elif 'date' in query:
+            date_today = datetime.datetime.now().strftime("%A, %B %d, %Y")
+            speak(f"Today's date is {date_today}")
+
+        # Open Websites
+        elif 'open youtube' in query:
+            speak("Opening YouTube")
+            webbrowser.open("https://www.youtube.com")
+
+        elif 'open google' in query:
+            speak("Opening Google")
+            webbrowser.open("https://www.google.com")
+
+        elif 'search google' in query:
+            speak("What should I search for?")
+            search_query = take_command()
+            url = f"https://www.google.com/search?q={search_query}"
+            webbrowser.open(url)
+            speak(f"Here are the Google search results for {search_query}")
+
+        # Open Local Applications
+        elif 'open notepad' in query:
+            speak("Opening Notepad")
+            os.system("notepad.exe")
+
+        elif 'open calculator' in query:
+            speak("Opening Calculator")
+            os.system("calc.exe")
+
+        # Play Music
+        elif 'play music' in query:
+            speak("Opening Spotify")
+            webbrowser.open("https://www.spotify.com")
+
+        # Fetch Weather
+        elif 'weather' in query:
+            speak("Which city's weather would you like to check?")
+            city = take_command()
+            weather_report = get_weather(city)
+            speak(weather_report)
+
+        # Tell Jokes
+        elif 'tell me a joke' in query:
+            jokes = [
+                "Why don’t skeletons fight each other? Because they don’t have the guts!",
+                "Why did the scarecrow win an award? Because he was outstanding in his field!",
+                "Why did the math book look sad? Because it had too many problems!"
+            ]
+            speak(random.choice(jokes))
+
+        # Set Alarm (Basic Example)
+        elif 'set alarm' in query:
+            speak("At what time should I set the alarm?")
+            alarm_time = input("Enter time in HH:MM format (24-hour format): ")
+            speak(f"Alarm set for {alarm_time}. I will remind you then.")
+
+        # Exit Command
+        elif 'exit' in query or 'stop' in query or 'sleep' in query:
+            speak("Goodbye! Have a great day.")
+            break
+
+        # Default Response
+        else:
+            speak("I am not sure how to respond to that. Please try again.")
